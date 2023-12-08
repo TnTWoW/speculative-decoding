@@ -1,15 +1,13 @@
 import gzip
 import random
-import tqdm
 import numpy as np
-import time
 from functools import wraps, partial
 import torch
-from torch.optim import Adam
-from torch.nn import functional as F
 from torch.cuda import synchronize, Event
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 timer = partial(Event, enable_timing = True)
 
@@ -32,7 +30,6 @@ GENERATE_LENGTH = 512
 SEQ_LEN = 512
 GAMMA = 5
 
-DEVICE_STR = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 MODELZOO = {
     # llama-1
@@ -70,12 +67,25 @@ def benchmark(fn):
 
 # instantiate transformer
 
-device = torch.device(DEVICE_STR)
+# device = torch.device(DEVICE_STR)
 approx_model_name = MODELZOO["llama2-13b"]
 target_model_name = MODELZOO["llama2-70b"]
-tokenizer = AutoTokenizer.from_pretrained(approx_model_name, trust_remote_code=True)
-approx_model = AutoModelForCausalLM.from_pretrained(approx_model_name, trust_remote_code=True).to(device)
-target_model = AutoModelForCausalLM.from_pretrained(target_model_name, trust_remote_code=True).to(device)
+
+torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = torch.device(torch_device)
+
+tokenizer = AutoTokenizer.from_pretrained(approx_model_name,
+                                          trust_remote_code=True)
+
+approx_model = AutoModelForCausalLM.from_pretrained(approx_model_name,
+                                                    torch_dtype=torch.float16,
+                                                    device_map="auto",
+                                                    trust_remote_code=True)
+
+target_model = AutoModelForCausalLM.from_pretrained(target_model_name,
+                                                    torch_dtype=torch.float16,
+                                                    device_map="auto",
+                                                    trust_remote_code=True)
 
 # prepare enwik8 data
 
